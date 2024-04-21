@@ -15,16 +15,17 @@
 
 
 bl_info = {
-    "name": "Multi-Object Slice",
+    "name": "Multi-Mesh Slicer",
     "description": "Allows you to slice selected objects in parts base on the bound box",
     "author": "haseeb295",
     "version": (0, 0, 1),
     "blender": (3, 0, 0),
-    "location": "View3D",
+    "location": "View3D > N-Panel > Multi-Mesh Slicer",
     "warning": "This addon is still in development.",
-    "wiki_url": "",
-    "category": "Object" }
-    
+    "category": "Object",
+    "tracker_url":"https://github.com/haseebahmed295/Multi-Mesh-Slicer/issues"
+}
+
 import bpy
 import bmesh
 from mathutils import Vector
@@ -39,19 +40,18 @@ def get_classes():
             classes.append(obj)
     return classes
 
-
 class Cutter(bpy.types.Operator):
-    bl_idname = "object.cut_in_parts"
-    bl_label = "Cutter"
-    bl_description = "Cuts objects in parts"
+    bl_idname = "object.multi_object_slicer"
+    bl_label = "Slicer"
+    bl_description = "slice selected objects in parts based on the bound box"
     bl_options = {"REGISTER"}
+    bl_info = {'UNDO': False}
 
     @classmethod
     def poll(cls, context):
         return True
 
     def execute(self, context):
-
         selected_obj = list(bpy.context.selected_objects)
         other_obj = {}
         for obj in bpy.data.objects:
@@ -63,14 +63,13 @@ class Cutter(bpy.types.Operator):
         # Create a new mesh object
         mesh = bpy.data.meshes.new(name=bounding_box_name)
         bound_obj = bpy.data.objects.new(bounding_box_name, mesh)
-        x_cuts = context.scene.x_Cuts
-        y_cuts = context.scene.y_Cuts
-        z_cuts = context.scene.z_Cuts
+        x_cuts = context.scene.x_Cuts+1
+        y_cuts = context.scene.y_Cuts+1
+        z_cuts = context.scene.z_Cuts+1
         # Link it to the scene
         scene = bpy.context.scene
         scene.collection.objects.link(bound_obj)
 
-        
         # Get all the meshes in the scene
         meshes = [o for o in selected_obj]
 
@@ -95,19 +94,20 @@ class Cutter(bpy.types.Operator):
         y_points = self.find_division_point_y(obj.location[0], y1, y2, obj.location[2], self.find_pairs_summing_to(y_cuts))
         z_points = self.find_division_point_z(obj.location[0], obj.location[1], z1, z2, self.find_pairs_summing_to(z_cuts))
 
-        normal_objs = []
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in selected_obj:
-                bpy.context.view_layer.objects.active = obj
-                obj.select_set(True)
-                bpy.ops.object.duplicate()
-                normal_objs.append(bpy.context.object)
-                modifier = obj.modifiers.new("Slicer Normal","DATA_TRANSFER")
-                modifier.object = bpy.context.object
-                modifier.use_loop_data = True
-                modifier.data_types_loops = {'CUSTOM_NORMAL'}
-                bpy.context.object.hide_viewport = True
-                bpy.ops.object.select_all(action='DESELECT')
+        if context.scene.preserve_normals:
+            normal_objs = []
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in selected_obj:
+                    bpy.context.view_layer.objects.active = obj
+                    obj.select_set(True)
+                    bpy.ops.object.duplicate()
+                    normal_objs.append(bpy.context.object)
+                    modifier = obj.modifiers.new("Slicer Normal","DATA_TRANSFER")
+                    modifier.object = bpy.context.object
+                    modifier.use_loop_data = True
+                    modifier.data_types_loops = {'CUSTOM_NORMAL'}
+                    bpy.context.object.hide_viewport = True
+                    bpy.ops.object.select_all(action='DESELECT')
 
         bpy.context.view_layer.objects.active = bound_obj
 
@@ -125,31 +125,27 @@ class Cutter(bpy.types.Operator):
             self.slice_mesh(point=p, plane=(0, 0, 1))
             self.delete_empty_ob()
 
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in bpy.context.visible_objects:
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
-            for modifier in obj.modifiers:
-                if modifier.name== 'Slicer Normal':
-                    bpy.ops.object.modifier_apply(modifier=modifier.name)
+        if context.scene.preserve_normals:
             bpy.ops.object.select_all(action='DESELECT')
-            
-
-        # Clean up.
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in normal_objs:
-            obj.hide_viewport = False
-            obj.select_set(True)
-        bpy.ops.object.delete()
+            for obj in bpy.context.visible_objects:
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+                for modifier in obj.modifiers:
+                    if modifier.name== 'Slicer Normal':
+                        bpy.ops.object.modifier_apply(modifier=modifier.name)
+                bpy.ops.object.select_all(action='DESELECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in normal_objs:
+                obj.hide_viewport = False
+                obj.select_set(True)
+            bpy.ops.object.delete()
 
         self.del_bound_box(bounding_box_name)
-
         for obj in other_obj:
             obj.hide_viewport = other_obj[obj]
 
+        bpy.context.view_layer.objects.active = selected_obj[0]
         return {"FINISHED"}
-
-
 
 
     def del_bound_box(self,n_box):
@@ -243,23 +239,25 @@ class Cutter(bpy.types.Operator):
 
 class Cutter_Panel(bpy.types.Panel):
     bl_idname = "VIEW3D_PT_tools_cutter"
-    bl_label = "Cutter"
+    bl_label = "Slicer"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "category"
+    bl_category ="Slicer"
 
     def draw(self, context):
         layout = self.layout
         layout.prop(context.scene, "x_Cuts")
         layout.prop(context.scene, "y_Cuts")
         layout.prop(context.scene, "z_Cuts")
-        layout.operator(Cutter.bl_idname)
+        layout.prop(context.scene, "preserve_normals")
+        layout.operator(Cutter.bl_idname , text = "Slice")
 
 
 def register():
-    bpy.types.Scene.x_Cuts = bpy.props.IntProperty(name ="X Cuts" , default=2)
-    bpy.types.Scene.y_Cuts = bpy.props.IntProperty(name ="Y Cuts" , default=2)
-    bpy.types.Scene.z_Cuts = bpy.props.IntProperty(name ="Z Cuts" , default=2)
+    bpy.types.Scene.x_Cuts = bpy.props.IntProperty(name ="X Cuts" , default=1)
+    bpy.types.Scene.y_Cuts = bpy.props.IntProperty(name ="Y Cuts" , default=1)
+    bpy.types.Scene.z_Cuts = bpy.props.IntProperty(name ="Z Cuts" , default=1)
+    bpy.types.Scene.preserve_normals = bpy.props.BoolProperty(name ="Preserve Normals" , default=True)
     for cls in get_classes():
         bpy.utils.register_class(cls)
     
