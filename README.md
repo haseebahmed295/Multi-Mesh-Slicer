@@ -1,4 +1,5 @@
 <p>A Simple addon to slice multi-objects into part based on the a bound box .</p>
+<p> For installation just download as a zip and install in blender .</p>
 <p>The addon panel is located in Viewport &gt; N-Panel &gt; Slicer</p>
 <p>It is easy to use . </p>
 <ol>
