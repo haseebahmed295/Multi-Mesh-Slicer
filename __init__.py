@@ -144,7 +144,8 @@ class Cutter(bpy.types.Operator):
         for obj in other_obj:
             obj.hide_viewport = other_obj[obj]
 
-        bpy.context.view_layer.objects.active = selected_obj[0]
+        bpy.context.view_layer.objects.active = bpy.data.objects[0]
+        bpy.data.objects[0].select_set(True)
         return {"FINISHED"}
 
 
